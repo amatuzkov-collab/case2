@@ -1,243 +1,257 @@
-# operation_data_shield.py
-
-import re
 import base64
+import re
 import codecs
 
+def find_and_validate_credit_cards(text):
+    """
+    Находит номера карт и проверяет по алгоритму Луна.
+    Возвращает: {'valid': [], 'invalid': []}
+    """
+    # Ищем последовательности из 16 цифр (с любыми разделителями)
+    card_pattern = r'\b(?:\d[ -]*?){13,19}\d\b'
+    matches = re.findall(card_pattern, text)
+    
+    # Очищаем от нецифровых символов
+    cleaned_cards = [re.sub(r'\D', '', match) for match in matches]
+    cleaned_cards = [card for card in cleaned_cards if len(card) == 16]
 
-# Здесь команда размещает все функции
-def generate_comprehensive_report(main_text, log_text, messy_data):
-    """ Генерирует полный отчет о расследовании """
-    report = { 'financial_data': find_and_validate_credit_cards(main_text),
-               'secrets': find_secrets(main_text),
-               'system_info': find_system_info(main_text),
-               'encoded_messages': decode_messages(main_text),
-               'security_threats': analyze_logs(log_text),
-               'normalized_data': normalize_and_validate(messy_data)
-               }
-    return report
-
-
-def find_and_validate_credit_cards(main_text):
     def luhn_check(card_number):
-        card_number = re.sub('\D', '', card_number)
-        if len(card_number) != 16:
-            return False
+        digits = [int(d) for d in card_number]
+        checksum = 0
+        for i, d in enumerate(reversed(digits)):
+            if i % 2 == 1:
+                d *= 2
+                if d > 9:
+                    d -= 9
+            checksum += d
+        return checksum % 10 == 0
 
-        total = 0
-        for index, digit in enumerate(reversed(card_number)):
-            dig = int(digit)
-            if index % 2 == 1:
-                dig *= 2
-                if dig > 9:
-                    dig -= 9
-            total += dig
-
-        return total % 10 == 0
-
-    result = {'valid' : [], 'invalid' : []}
-    card_pattern = r'\b(?:\d[ -]*?){16}\b'
-    potential_cards = re.findall(card_pattern, main_text)
-    for card in set(potential_cards):
-        clean_card = re.sub('-\s', '', card)
-        if luhn_check(clean_card):
-            result['valid'].append(clean_card)
+    result = {'valid': [], 'invalid': []}
+    for card in cleaned_cards:
+        if luhn_check(card):
+            result['valid'].append(card)
         else:
-            result['invalid'].append(clean_card)
+            result['invalid'].append(card)
 
     return result
 
 
-def find_secrets(main_text)
 
-
-# Здесь команда размещает все функции
-def generate_comprehensive_report(main_text, log_text, messy_data):
-    """ Генерирует полный отчет о расследовании """
-    report = { 'financial_data': find_and_validate_credit_cards(main_text),
-               'secrets': find_secrets(main_text),
-               'system_info': find_system_info(main_text),
-               'encoded_messages': decode_messages(main_text),
-               'security_threats': analyze_logs(log_text),
-               'normalized_data': normalize_and_validate(messy_data)
-               }
-    return report
-
-
-def find_and_validate_credit_cards(main_text):
-    def luhn_check(card_number):
-        card_number = re.sub('\D', '', card_number)
-        if len(card_number) != 16:
-            return False
-
-        total = 0
-        for index, digit in enumerate(reversed(card_number)):
-            dig = int(digit)
-            if index % 2 == 1:
-                dig *= 2
-                if dig > 9:
-                    dig -= 9
-            total += dig
-
-        return total % 10 == 0
-
-    result = {'valid' : [], 'invalid' : []}
-    card_pattern = r'\b(?:\d[ -]*?){16}\b'
-    potential_cards = re.findall(card_pattern, main_text)
-
-    for card in set(potential_cards):
-        clean_card = re.sub('\D', '', card)
-        if luhn_check(clean_card):
-            result['valid'].append(clean_card)
-        else:
-            result['invalid'].append(clean_card)
-
-    return result
-
-
-def find_secrets(main_text):
+def find_secrets(text):
+    """
+    Ищет API-ключи, пароли, токены.
+    Возвращает: список найденных секретов
+    """
     secrets = []
 
-    api_pattern = (r'\b(?:sk_live_|pk_live_|sk_test_|pk_test_|'
-                   r'rk_live_|_rk_live_|ghp_)[a-zA-Z0-9_\-]{16,}\b'
-                   )
-    api_keys = re.findall(api_pattern, main_text)
-    secrets.extend(api_keys)
+    # Stripe API keys
+    stripe_live = re.findall(r'sk_live_[a-zA-Z0-9_]{24,}', text)
+    stripe_test = re.findall(r'sk_test_[a-zA-Z0-9_]{24,}', text)
+    secrets.extend(stripe_live + stripe_test)
 
-    passwords = re.findall(
-        r'(?:пароль|password)[:\s]*([A-Za-z0-9!@#$%^&*]{12,})',
-        main_text,
-        re.IGNORECASE
-    )
+    # Пароли: длина >=8, есть цифры и спецсимволы
+    password_pattern = r'\b(?=.*[!@#$%^&*(),.?":{}|<>])(?=.*\d)[A-Za-z\d!@#$%^&*(),.?":{}|<>]{8,}\b'
+    passwords = re.findall(password_pattern, text)
+    # Исключим слишком простые совпадения
+    passwords = [p for p in passwords if not p.isalpha() and not p.isdigit()]
     secrets.extend(passwords)
 
-    words = main_text.split()
-    for word in words:
-        clean_word = word.strip('.,:;!?"\'()[]{}<>')
+    # JWT-токены (упрощённо)
+    jwt_pattern = r'ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*'
+    jwts = re.findall(jwt_pattern, text)
+    secrets.extend(jwts)
 
-        if len(clean_word) >= 12:
-            if (re.search(r'[A-Za-z]', clean_word) and
-                    re.search(r'\d', clean_word) and
-                    re.search(r'[!@#$%^&*()_+={}\[\]:;"\'<>,.?/~`|\\-]', clean_word)):
-                secrets.append(clean_word)
+    # Приватные ключи (PEM)
+    pem_keys = re.findall(r'-----BEGIN [A-Z ]+PRIVATE KEY-----.+?-----END [A-Z ]+PRIVATE KEY-----', text, re.DOTALL)
+    secrets.extend(pem_keys)
 
-    return list(set(secrets))
+    return list(set(secrets))  # Убираем дубли
 
 
-def find_system_info(main_text):
+
+def find_system_info(text):
+    """
+    Ищет IP, файлы, email.
+    Возвращает: {'ips': [], 'files': [], 'emails': []}
+    """
     result = {
         'ips': [],
-        'emails': [],
-        'files': []
+        'files': [],
+        'emails': []
     }
-    
-    ip_pattern = r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'
-    ips = re.findall(ip_pattern, main_text)
 
-    for ip in ips:
-        parts = ip.split('.')
-        valid = True
-        for part in parts:
-            if int(part) > 255:
-                valid = False
-                break
-        if valid:
-            result['ips'].append(ip)
+    # IPv4 адреса
+    ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
+    ips = re.findall(ip_pattern, text)
+    valid_ips = [ip for ip in ips if all(0 <= int(octet) <= 255 for octet in ip.split('.'))]
+    result['ips'] = list(set(valid_ips))
 
-    email_pattern = r'\b[\w.-]+@[\w.-]+\.\w+\b'
-    result['emails'] = re.findall(email_pattern, main_text)
+    # Email
+    email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
+    result['emails'] = list(set(re.findall(email_pattern, text)))
 
-    file_pattern = r'\b[\w\-]+\.(?:txt|pdf|jpg|png|py|js|html|css|log)\b'
-    result['files'] = re.findall(file_pattern, main_text)
+    # Файлы: имена с расширениями
+    file_pattern = r'\b[a-zA-Z0-9_\-\.]+\.(?:log|txt|csv|json|xml|pdf|docx|exe|bat|sh|pem|key)\b'
+    result['files'] = list(set(re.findall(file_pattern, text)))
 
     return result
 
 
-from typing import List, Dict
-import re, base64, codecs
-
-
-def decode_messages(file: str) -> Dict[str, List[str]]:
+def decode_messages(text):
     """
-    Finds and decrypts messages
-    Returns: {'base64': [], 'hex': [], 'rot13': []}
+    Находит и расшифровывает Base64, Hex, ROT13.
+    Возвращает: {'base64': [], 'hex': [], 'rot13': []}
     """
+    result = {'base64': [], 'hex': [], 'rot13': []}
 
-    mask_1 = r'[A-Za-z0-9+/]+[=]{1,2}'
+    # Base64
+    b64_pattern = r'([A-Za-z0-9+/]{20,}={0,2})'
+    for candidate in re.findall(b64_pattern, text):
+        try:
+            decoded = base64.b64decode(candidate).decode('utf-8', errors='ignore')
+            if len(decoded) > 2 and all(ord(c) >= 32 or ord(c) == 10 for c in decoded):
+                result['base64'].append(decoded.strip())
+        except:
+            pass
 
-    base64_strings = re.findall(mask_1, file)
-    base64_decoded = []
+    # Hex чистый bytes.fromhex без каких либо зависимостей
+    hex_patterns = [
+        r'0x([A-Fa-f0-9]{4,})',
+        r'(?:\\x[0-9A-Fa-f]{2})+'
+    ]
 
-    for message in base64_strings:
-        if len(message) % 4 == 0:
-            base64message = base64.b64decode(message).decode('utf-8')
-            base64_decoded.append(base64message)
+    for h in re.findall(hex_patterns[0], text):
+        try:
+            decoded = bytes.fromhex(h).decode('utf-8', errors='ignore')
+            if decoded.strip():
+                result['hex'].append(decoded.strip())
+        except:
+            pass
+
+    for seq in re.findall(hex_patterns[1], text):
+        try:
+            clean = seq.replace('\\x', '')
+            decoded = bytes.fromhex(clean).decode('utf-8', errors='ignore')
+            if decoded.strip():
+                result['hex'].append(decoded.strip())
+        except:
+            pass
+
+    # ROT13
+    for word in set(re.findall(r'[a-zA-Z]{8,}', text)):
+        decoded = codecs.encode(word, 'rot13')
+        if 'password' in decoded.lower() or 'secret' in decoded.lower():
+            result['rot13'].append(decoded)
+
+    # Уникальные значения
+    for k in result:
+        result[k] = list(set(result[k]))
+
+    return result
 
 
-    mask_2 = r'0x[A-Fa-f0-9]+'
 
-    hex_strings = re.findall(mask_2, file)
-    hex_decoded = []
+def analyze_logs(log_text):
+    """
+    Анализирует логи веб-сервера.
+    Возвращает: {sql_injections, xss_attempts, suspicious_user_agents, failed_logins}
+    """
+    lines = log_text.strip().split('\n')
+    result = {
+        'sql_injections': [],
+        'xss_attempts': [],
+        'suspicious_user_agents': [],
+        'failed_logins': []
+    }
 
-    for message in hex_strings:
-        hex_message = codecs.decode(message[2:], 'hex').decode('utf-8')
-        hex_decoded.append(hex_message)
+    sql_pattern = r"(?:'|--|\bOR\b|\bUNION\b).*?(?:=|>|<)"
+    xss_pattern = r"<script[^>]*?>.*?</script>|<.*?on\w+=|&#x?[\dA-F]+;"
+    login_paths = ["/login", "/admin", "/auth", "/signin"]
 
-    mask_3 = r'\$[A-Za-z\s]+\$'
+    for line in lines:
+        ip_match = re.match(r'([\d\.]+)', line)
+        ip = ip_match.group(1) if ip_match else "unknown"
 
-    rot13_strings = re.findall(mask_3, file)
-    rot13_decoded = []
+        # SQL Injection
+        if re.search(sql_pattern, line, re.IGNORECASE):
+            result['sql_injections'].append({'ip': ip, 'line': line.strip()})
 
-    for message in rot13_strings:
-        rot13_message = codecs.decode(message, 'rot13')
-        rot13_decoded.append(rot13_message.replace('$', ''))
+        # XSS
+        if re.search(xss_pattern, line, re.IGNORECASE):
+            result['xss_attempts'].append({'ip': ip, 'line': line.strip()})
 
-    return {
-        'base64': base64_decoded,
-        'hex': hex_decoded,
-        'rot13': rot13_decoded
-           }
+        # Failed login (401)
+        if '" 401 ' in line or '/login' in line.lower() and 'POST' in line and '200' not in line:
+            result['failed_logins'].append({'ip': ip, 'line': line.strip()})
+
+        # Подозрительные User-Agent
+        ua_match = re.search(r'"([^"]*?)"$', line)
+        if ua_match:
+            ua = ua_match.group(1)
+            if 'EvilBot' in ua or 'sqlmap' in ua or 'nikto' in ua or 'burp' in ua.lower():
+                result['suspicious_user_agents'].append({'ip': ip, 'user_agent': ua})
+
+    return result
 
 
-def normalize_and_validate(file: str) -> Dict[str, Dict[str, list]]:
-    """ Brings the data to a single format and verifies it
-        Returns:  { 'phones': {'valid': [], 'invalid': []},
-                    'dates': {'normalized': [], 'invalid': []},
-                    'inn': {'valid': [], 'invalid': []},
-                    'cards': {'valid': [], 'invalid': []} } """
 
-    valid_phones = []
-    pattern_1 = r'[+]?[78][- ]?\d{3}[- ]?\d{3}[- ]?\d{2}[- ]?\d{2}'
-    invalid_phones = re.findall(pattern_1, file)
 
-    for phone in invalid_phones:
-        valid_phones.append(re.sub(r'\D', '', phone))
+def normalize_and_validate(text):
+    """
+    Нормализует телефоны, даты, ИНН, карты.
+    Возвращает: {'phones': {}, 'dates': {}, 'inn': {}, 'cards': {}}
+    """
+    result = {
+        'phones': {'valid': [], 'invalid': []},
+        'dates': {'normalized': [], 'invalid': []},
+        'inn': {'valid': [], 'invalid': []},
+        'cards': {'valid': [], 'invalid': []}
+    }
 
-    for index in range(len(valid_phones)):
-        valid_phones[index] = ('+' + valid_phones[index][0] + '(' + valid_phones[index][1:4] + ')'
-                               + valid_phones[index][4:7] + '-'
-                               + valid_phones[index][7:9] + '-' + valid_phones[index][9:11])
+    # === Телефоны ===
+    phone_pattern = r'(?:\+7|8)[\-\s\(]?\d{3}[\-\s\)]?\d{3}[\-\s]?\d{2}[\-\s]?\d{2}'
+    for p in re.findall(phone_pattern, text):
+        cleaned = re.sub(r'\D', '', p)
+        if len(cleaned) == 11:
+            normalized = f'+7{cleaned[1:]}'
+            result['phones']['valid'].append(normalized)
+        else:
+            result['phones']['invalid'].append(p)
 
-    pattern_2 = r'(?:\d{2}[-/.]\d{2}[-/.]\d{2,4})|(?:\d{4}[/.-]\d{2}[/.-]\d{2})'
-    normalized_dates = invalid_dates = re.findall(pattern_2, file)
+    months = {
+        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06',
+        'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+    }
 
-    pattern_3 = r'(?:\b\d{10}\b)|(?:\b\d{12}\b)'
-    valid_inn = invalid_inn = re.findall(pattern_3, file)
+    # dd.mm.yyyy
+    for d, m, y in re.findall(r'\b(\d{2})\.(\d{2})\.(\d{4})\b', text):
+        if 1 <= int(m) <=12 and 1 <= int(d) <=31:
+            result['dates']['normalized'].append(f"{y}-{m}-{d}")
 
-    valid_cards = []
-    pattern_4 = r'\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{4}'
-    invalid_cards = set(re.findall(pattern_4, file))
+    # yyyy/mm/dd
+    for y, m, d in re.findall(r'\b(\d{4})/(\d{2})/(\d{2})\b', text):
+        if 1 <= int(m) <=12 and 1 <= int(d) <=31:
+            result['dates']['normalized'].append(f"{y}-{m}-{d}")
 
-    for card in invalid_cards:
-        valid_cards.append(re.sub(r'\D', '', card))
+    # dd-Mon-yyyy
+    for d, mon, y in re.findall(r'\b(\d{1,2})-([A-Za-z]{3})-(\d{4})\b', text, re.IGNORECASE):
+        mon_num = months.get(mon.lower())
+        if mon_num and 1 <= int(d) <=31:
+            result['dates']['normalized'].append(f"{y}-{mon_num}-{d.zfill(2)}")
 
-    for index in range(len(valid_cards)):
-        valid_cards[index] = (valid_cards[index][:4] + '-' + valid_cards[index][4:8] + '-' +
-                              valid_cards[index][8:12] + '-' + valid_cards[index][12:16])
+    #  ИНН 
+    for inn in re.findall(r'\b\d{10,12}\b', text):
+        if len(inn) in (10, 12) and inn.isdigit():
+            result['inn']['valid'].append(inn)
+        else:
+            result['inn']['invalid'].append(inn)
 
-    return {
-        'phones': {'valid': valid_phones, 'invalid': invalid_phones},
-        'dates': {'normalized': normalized_dates, 'invalid': invalid_dates},
-        'inn': {'valid': valid_inn, 'invalid': invalid_inn},
-        'cards': {'valid': valid_cards, 'invalid': invalid_cards}
-           }
+    #  Карты 
+    result['cards'] = find_and_validate_credit_cards(text)
+
+    # Убираем дубли
+    for section in result.values():
+        for key in section:
+            section[key] = list(set(section[key]))
+
+    return result
